@@ -21,8 +21,8 @@
 #include <SPIFFS.h> 
 
 // Datos de acceso a WIFI - ESP32 -> Internet
-// const char* ssid = "Alumnos";
-// const char* password = "@@1umN05@@";
+const char* ssid = "Alumnos";
+const char* password = "@@1umN05@@";
 
 // Datos para conectarse al AP (esp32)
 const char* ap_ssid = "ESP32_AP";
@@ -70,27 +70,28 @@ void setup(){
 
   SerialBT.begin("Sensores_ESP32"); 
 
-  // Serial.print("Conectando a WiFi: ");
-  // SerialBT.print("Conectando a WiFi: ");
-  // Serial.println(ssid);
-  // SerialBT.println(ssid);                     
+  WiFi.mode(WIFI_AP_STA);
+
+  Serial.print("Conectando a WiFi: ");
+  SerialBT.print("Conectando a WiFi: ");
+  Serial.println(ssid);
+  SerialBT.println(ssid);                     
   
-  // WiFi.begin(ssid, password);
+  WiFi.begin(ssid, password);
 
-  // while (WiFi.status() != WL_CONNECTED) {
-  //   delay(500);
-  //   Serial.print("--- Conectando ---");
-  //   SerialBT.print("--- Conectando ---");                       
-  // }
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("--- Conectando ---");
+    SerialBT.print("--- Conectando ---");                       
+  }
 
-  // Serial.println("\nWiFi conectado :)");
-  // SerialBT.println("\nWiFi conectado :)"); 
-  // Serial.print("Dirección IP: ");
-  // SerialBT.print("Dirección IP: ");               
-  // Serial.println(WiFi.localIP());
-  // SerialBT.println(WiFi.localIP());               
+  Serial.println("\nWiFi conectado :)");
+  SerialBT.println("\nWiFi conectado :)"); 
+  Serial.print("Dirección IP: ");
+  SerialBT.print("Dirección IP: ");               
+  Serial.println(WiFi.localIP());
+  SerialBT.println(WiFi.localIP());               
 
-  WiFi.mode(WIFI_AP);
   WiFi.softAP(ap_ssid, ap_password);
 
   dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
@@ -153,7 +154,17 @@ void loop(){
         server.handleClient();
       }
     } else if (Eleccion == 3) {
-      mostrarRedIP();
+        if (WiFi.status() == WL_CONNECTED) {
+      
+          char buffer[100];
+          sprintf(buffer, "Red: %s\n  IP: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+      
+          Serial.println(buffer);
+          SerialBT.println(buffer);
+        } else { 
+          Serial.println("No conectado a ninguna red WiFi.");
+          SerialBT.println("No conectado a ninguna red WiFi.");
+        }
       delay(1000); 
     }
   }
@@ -198,19 +209,4 @@ int SeleccionarOpcion(){
     } 
   }
   return 0; 
-}
-
-void mostrarRedIP() {
-
-  if (WiFi.status() == WL_CONNECTED) {
-
-    char buffer[100];
-    sprintf(buffer, "Red: %s\n  IP: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
-
-    Serial.println(buffer);
-    SerialBT.println(buffer);
-  } else { 
-    Serial.println("No conectado a ninguna red WiFi.");
-    SerialBT.println("No conectado a ninguna red WiFi.");
-  }
 }
