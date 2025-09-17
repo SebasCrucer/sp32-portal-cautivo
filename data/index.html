@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Portal de Acceso</title>
+    <style>
+        :root {
+            --bg: #0e0f12;
+            /* fondo */
+            --card: #14161b;
+            /* tarjeta */
+            --ink: #e8eaf0;
+            /* texto */
+            --muted: #9aa3b2;
+            /* texto tenue */
+            --brand: #5b8cff;
+            /* acento */
+            --brand-2: #7aa2ff;
+            /* acento hover */
+            --error: #ff6b6b;
+            --radius: 14px;
+            --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html,
+        body {
+            height: 100%
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+            background: radial-gradient(1200px 600px at 20% -10%, #1a1d24 0%, transparent 60%),
+                radial-gradient(900px 500px at 120% 20%, #1b1f28 0%, transparent 60%),
+                var(--bg);
+            color: var(--ink);
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+
+        .wrap {
+            width: 100%;
+            max-width: 380px
+        }
+
+        .card {
+            background: linear-gradient(180deg, rgba(255, 255, 255, .02), rgba(255, 255, 255, .00)),
+                var(--card);
+            border: 1px solid rgba(255, 255, 255, .06);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 28px;
+            backdrop-filter: saturate(120%) blur(3px);
+        }
+
+        .logo {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 14px;
+            background: linear-gradient(135deg, var(--brand), #3a58ff);
+            box-shadow: 0 6px 18px rgba(91, 140, 255, .45);
+            user-select: none;
+        }
+
+        .logo span {
+            font-weight: 800;
+            color: white
+        }
+
+        h1 {
+            margin: 6px 0 4px;
+            font-size: 1.28rem;
+            letter-spacing: .2px
+        }
+
+        p.sub {
+            margin: 0 0 18px;
+            color: var(--muted);
+            font-size: .95rem
+        }
+
+        form {
+            display: grid;
+            gap: 12px;
+            margin-top: 6px
+        }
+
+        .field {
+            display: grid;
+            gap: 6px
+        }
+
+        label {
+            font-size: .9rem;
+            color: var(--muted)
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px 14px;
+            font: inherit;
+            color: var(--ink);
+            background: #0f1217;
+            border: 1px solid #242832;
+            border-radius: 10px;
+            outline: none;
+            transition: border .15s ease, box-shadow .15s ease;
+        }
+
+        input:focus {
+            border-color: var(--brand);
+            box-shadow: 0 0 0 3px rgba(91, 140, 255, .15)
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 2px
+        }
+
+        .row a {
+            color: var(--muted);
+            font-size: .88rem;
+            text-decoration: none
+        }
+
+        .row a:hover {
+            color: var(--ink);
+            text-decoration: underline
+        }
+
+        .btn {
+            appearance: none;
+            border: 0;
+            cursor: pointer;
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 600;
+            background: linear-gradient(180deg, var(--brand-2), var(--brand));
+            color: white;
+            letter-spacing: .2px;
+            box-shadow: 0 10px 18px rgba(91, 140, 255, .35);
+            transition: transform .06s ease, filter .15s ease;
+        }
+
+        .btn:hover {
+            filter: saturate(110%) brightness(1.05)
+        }
+
+        .btn:active {
+            transform: translateY(1px)
+        }
+
+        .foot {
+            margin-top: 14px;
+            text-align: center;
+            color: var(--muted);
+            font-size: .86rem;
+        }
+
+        .note {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border: 1px dashed #2a2f3a;
+            border-radius: 10px;
+            color: #cfd6e6;
+            background: #10131a;
+            font-size: .82rem;
+            line-height: 1.25rem;
+        }
+
+        @media (max-width:360px) {
+            .card {
+                padding: 22px
+            }
+
+            h1 {
+                font-size: 1.12rem
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="wrap">
+        <section class="card" role="region" aria-labelledby="title">
+            <div class="logo" aria-hidden="true"><span>∞</span></div>
+            <h1 id="title">Portal de Acceso</h1>
+            <p class="sub">Inicia sesión para continuar.</p>
+
+
+            <form method="post" action="#">
+                <div class="field">
+                    <label for="user">Usuario</label>
+                    <input id="user" name="username" type="text" autocomplete="username" required
+                        placeholder="tu.usuario" />
+                </div>
+
+                <div class="field">
+                    <label for="pass">Contraseña</label>
+                    <input id="pass" name="password" type="password" autocomplete="current-password" required
+                        placeholder="••••••••" />
+                </div>
+
+                <div class="row">
+                    <label style="display:flex; align-items:center; gap:8px; color:var(--muted);">
+                        <input type="checkbox" name="remember" style="accent-color:#5b8cff;"> Recuérdame
+                    </label>
+                    <a href="#">¿Olvidaste tu contraseña?</a>
+                </div>
+
+                <button class="btn" type="submit">Entrar</button>
+            </form>
+
+            <div class="foot">
+                ¿No tienes cuenta? <a href="#" style="color:#cfd6e6">Crear una</a>
+            </div>
+
+            <div class="note">
+                Nota: Este es un formulario estático (solo HTML/CSS). Para validar credenciales realmente,
+                el atributo <code>action</code> debe apuntar a un endpoint (por ejemplo, en tu ESP32 o backend)
+                que reciba <code>POST</code> con <code>username</code> y <code>password</code>.
+            </div>
+        </section>
+    </main>
+</body>
+
+</html>
