@@ -13,8 +13,13 @@
 #include "BluetoothSerial.h"
 
 #include <WiFi.h>
-#include <WebServer.h>
-#include <DNSServer.h>
+// WebServer y DNSServer no son necesarios para una conexión simple
+// #include <WebServer.h>
+// #include <DNSServer.h>
+
+// Datos de acceso a WIFI
+const char* ssid = "Alumnos";
+const char* password = "@@1umN05@@";
 
 
 // # Variables
@@ -40,12 +45,32 @@ int SeleccionarOpcion();
 void setup(){
   Serial.begin(9600);
 
+  SerialBT.begin("Sensores_ESP32"); 
+
+  Serial.print("Conectando a WiFi: ");
+  SerialBT.print("Conectando a WiFi: ");
+  Serial.println(ssid);
+  SerialBT.println(ssid);                     
+  
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("--- Conectando ---");
+    SerialBT.print("--- Conectando ---");                       
+  }
+
+  Serial.println("\nWiFi conectado :)");
+  SerialBT.println("\nWiFi conectado :)"); 
+  Serial.print("Dirección IP: ");
+  SerialBT.print("Dirección IP: ");               
+  Serial.println(WiFi.localIP());
+  SerialBT.println(WiFi.localIP());               
+
   // ## Inicializar BH1750
   Wire.begin(); // iniciar protocolo I2C
   Luxometro.begin(); // Iniciar BH1750
 
-  // Bluetooth Serial
-  SerialBT.begin("Sensores_ESP32"); // Nombre del sensor
 }
 
 void loop(){
@@ -114,4 +139,5 @@ int SeleccionarOpcion(){
       SerialBT.println("ADVERTENCIA - Opción inválida.");
     }
   }
+
 }
