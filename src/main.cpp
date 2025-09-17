@@ -70,7 +70,7 @@ void setup(){
 
   SerialBT.begin("Sensores_ESP32"); 
 
-  WiFi.mode(WIFI_AP_STA);
+  WiFi.mode(WIFI_AP);
 
   Serial.print("Conectando a WiFi: ");
   SerialBT.print("Conectando a WiFi: ");
