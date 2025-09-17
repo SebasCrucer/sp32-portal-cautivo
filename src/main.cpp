@@ -152,6 +152,9 @@ void loop(){
         dnsServer.processNextRequest();
         server.handleClient();
       }
+    } else if (Eleccion == 3) {
+      mostrarRedIP();
+      delay(1000); 
     }
   }
   
@@ -186,11 +189,28 @@ int SeleccionarOpcion(){
       return 1;
     } else if(opcion == '2'){
       return 2;
+    } else if(opcion == '3'){
+      return 3;
     } else {
       Serial.println("ADVERTENCIA - Opción inválida.");
       SerialBT.println("ADVERTENCIA - Opción inválida.");
       return 0;
-    }
+    } 
   }
   return 0; 
+}
+
+void mostrarRedIP() {
+
+  if (WiFi.status() == WL_CONNECTED) {
+
+    char buffer[100];
+    sprintf(buffer, "Red: %s\n  IP: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+
+    Serial.println(buffer);
+    SerialBT.println(buffer);
+  } else { 
+    Serial.println("No conectado a ninguna red WiFi.");
+    SerialBT.println("No conectado a ninguna red WiFi.");
+  }
 }
