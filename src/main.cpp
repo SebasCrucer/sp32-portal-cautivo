@@ -34,12 +34,22 @@ BH1750 Luxometro; // Objeto BH1750
 BluetoothSerial SerialBT;
 
 // Datos de acceso a WIFI - ESP32 -> Internet
+// CONFIG (compile-time, en FLASH)
 const char* ssid = "Alumnos";
 const char* password = "@@1umN05@@";
 
 // Datos para conectarse al AP (esp32)
 const char* ap_ssid = "ESP32_AP";
 const char* ap_password = "12345678";
+
+static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
+static const uint8_t k_ap_maxcl = 4; // Máx. clientes simultáneos
+
+
+// Validaciones de rango (compile-time)
+static_assert(1 <= k_ap_chan && k_ap_chan <= 13, "Canal AP fuera de rango (1..13)");
+static_assert(1 <= k_ap_maxcl && k_ap_maxcl <= 10, "Max clientes fuera de rango (1..10)");
+
 
 // Configuración del DNS
 const byte DNS_PORT = 53;
@@ -50,9 +60,19 @@ WebServer server(80);
 
 
 // # Prototipado de funciones
+
+// ## Sensores
 std::array<float, 2> LecturaMicrofono(); // Regresará un arreglo de dos números, no es posible usar algo como float[2] porque ese objeto sería destruido después de terminar la función.
 float LecturaLuxometro();
+
+// ## Interfaz
 int SeleccionarOpcion();
+
+// ## Access Point
+void ap_start(void); // Inicializa SoftAP (IP/gateway/máscara + SSID/clave)
+IPAddress ap_ip(void); // Devuelve la IP actual del AP (sin guardar global)
+
+// ## Portal cautivo
 void handleRoot();
 void handleNotFound();
 
@@ -87,7 +107,7 @@ void setup(){
   SerialBT.println(WiFi.localIP());               
 
   // Crear Access Point propio
-  WiFi.softAP(ap_ssid, ap_password);
+  ap_start();
 
   // DNS server para redirigir tráfico del AP
   dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
@@ -214,6 +234,26 @@ int SeleccionarOpcion(){
 }
 
 // ## Access Point
+// ### Configuración
+void ap_start(void) {
+  // Subred estándar del SoftAP: 192.168.4.0/24; el ESP32 será 192.168.4.1
+  const IPAddress ip (192,168,4,1);
+  const IPAddress gw (192,168,4,1); // gateway = IP del AP
+  const IPAddress mask (255,255,255,0); // /24
+
+  // 1) Fijar IP/gateway/máscara del interfaz AP antes de encender el SSID
+  WiFi.softAPConfig(ip, gw, mask);
+
+  // 2) Encender AP (WPA2 si ap_password >= 8). SSID visible; máx. clientes limitado.
+  (void)WiFi.softAP(ap_ssid, ap_password, k_ap_chan, false, k_ap_maxcl);
+  // DHCP del AP es automático en el stack; clientes obtendrán 192.168.4.x
+}
+
+// Getter sin estado global: consulta al stack cuando se necesite.
+IPAddress ap_ip(void) {
+  return WiFi.softAPIP();
+}
+
 // ### Manejo de solicitudes HTTP dirigidas al directorio raíz del servidor (que, en este caso, es el microcontrolador).
 void handleRoot() {
   File file = SPIFFS.open("/index.html", "r"); // Para intentar abrir index.html en modo lectura.
