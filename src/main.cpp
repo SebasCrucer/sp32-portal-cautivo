@@ -64,14 +64,21 @@ void handleRoot() {
   server.send(200, "text/html", html);
 }
 
+// Manejar cualquier petición no encontrada
+void handleNotFound() {
+  handleRoot();
+}
+
 // # Setup + Loop
 void setup(){
   Serial.begin(9600);
 
   SerialBT.begin("Sensores_ESP32"); 
 
-  WiFi.mode(WIFI_AP);
+  // Modo combinado: AP + Station (puede conectarse Y crear red)
+  WiFi.mode(WIFI_AP_STA);
 
+  // Conectar a red externa como cliente
   Serial.print("Conectando a WiFi: ");
   SerialBT.print("Conectando a WiFi: ");
   Serial.println(ssid);
@@ -85,20 +92,22 @@ void setup(){
     SerialBT.print("--- Conectando ---");                       
   }
 
-  Serial.println("\nWiFi conectado :)");
-  SerialBT.println("\nWiFi conectado :)"); 
-  Serial.print("Dirección IP: ");
-  SerialBT.print("Dirección IP: ");               
+  Serial.println("\nWiFi conectado como cliente :)");
+  SerialBT.println("\nWiFi conectado como cliente :)"); 
+  Serial.print("IP como cliente: ");
+  SerialBT.print("IP como cliente: ");               
   Serial.println(WiFi.localIP());
   SerialBT.println(WiFi.localIP());               
 
+  // Crear Access Point propio
   WiFi.softAP(ap_ssid, ap_password);
 
+  // DNS server para redirigir tráfico del AP
   dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 
-  Serial.print("Access Point creado. IP: ");
+  Serial.print("Access Point creado. IP del AP: ");
   Serial.println(WiFi.softAPIP());
-  SerialBT.print("Access Point creado. IP: ");
+  SerialBT.print("Access Point creado. IP del AP: ");
   SerialBT.println(WiFi.softAPIP());
 
   if(!SPIFFS.begin(true)){
@@ -106,8 +115,13 @@ void setup(){
     return;
   }
 
-  server.onNotFound(handleRoot);
+  // Configurar manejadores del servidor web
   server.on("/", handleRoot);
+  server.on("/index.html", handleRoot);
+  server.on("/generate_204", handleRoot);    // Android captive portal detection
+  server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
+  server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
+  server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
   server.begin();
 
   // ## Inicializar BH1750
