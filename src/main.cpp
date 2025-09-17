@@ -20,6 +20,19 @@
 #include <FS.h>
 #include <SPIFFS.h> 
 
+// # Variables
+#define CantidadLecturas 25
+
+// ## KY-037
+#define MicrofonoAnalogo 34
+#define MicrofonoDigital 15
+
+// ## BH1750
+BH1750 Luxometro; // Objeto BH1750
+
+// ## Bluetooth
+BluetoothSerial SerialBT;
+
 // Datos de acceso a WIFI - ESP32 -> Internet
 const char* ssid = "Alumnos";
 const char* password = "@@1umN05@@";
@@ -35,39 +48,13 @@ DNSServer dnsServer;
 // Configuración del server (servicio que ofrece el HTML del portal)
 WebServer server(80);
 
-// # Variables
-#define CantidadLecturas 25
-
-// ## KY-037
-#define MicrofonoAnalogo 34
-#define MicrofonoDigital 15
-
-// ## BH1750
-BH1750 Luxometro; // Objeto BH1750
-
-// ## Bluetooth
-BluetoothSerial SerialBT;
 
 // # Prototipado de funciones
 std::array<float, 2> LecturaMicrofono(); // Regresará un arreglo de dos números, no es posible usar algo como float[2] porque ese objeto sería destruido después de terminar la función.
 float LecturaLuxometro();
 int SeleccionarOpcion();
-
-void handleRoot() {
-  File file = SPIFFS.open("/index.html", "r");
-  if (!file) {
-    server.send(500, "text/plain", "No se pudo abrir el archivo HTML");
-    return;
-  }
-  String html = file.readString();
-  file.close();
-  server.send(200, "text/html", html);
-}
-
-// Manejar cualquier petición no encontrada
-void handleNotFound() {
-  handleRoot();
-}
+void handleRoot();
+void handleNotFound();
 
 // # Setup + Loop
 void setup(){
@@ -186,20 +173,21 @@ void loop(){
   delay(10);
 }
 
-// ## KY-037
+// ## Funciones detalladas
+// ### KY-037
 std::array<float, 2> LecturaMicrofono(){
   int crudo = analogRead(MicrofonoAnalogo);
   float voltaje = (crudo*3.3)/4095.0;
-  return {crudo, voltaje};
+  return {(float)crudo, voltaje};
 }
 
-// ## BH1750
+// ### BH1750
 float LecturaLuxometro(){
   float lux = Luxometro.readLightLevel();
   return lux;
 }
 
-// ## Mostrar menu
+// ### Mostrar menu
 int SeleccionarOpcion(){
   char buffer[1000];
   sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)", CantidadLecturas, CantidadLecturas);
@@ -223,4 +211,22 @@ int SeleccionarOpcion(){
     } 
   }
   return 0; 
+}
+
+// ## Access Point
+// ### Manejo de solicitudes HTTP dirigidas al directorio raíz del servidor (que, en este caso, es el microcontrolador).
+void handleRoot() {
+  File file = SPIFFS.open("/index.html", "r"); // Para intentar abrir index.html en modo lectura.
+  if (!file) {
+    server.send(500, "text/plain", "No se pudo abrir el archivo HTML");
+    return;
+  }
+  String html = file.readString(); // Lectura de archivo HTML como String.
+  file.close(); // Cerrado para liberar recursos.
+  server.send(200, "text/html", html); // Envía a los clientes la página web en HTML.
+}
+
+// Manejar cualquier petición no encontrada
+void handleNotFound() {
+  handleRoot();
 }
