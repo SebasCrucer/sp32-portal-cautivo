@@ -231,7 +231,7 @@ void handleNotFound() {
   handleRoot();
 }
 
-void initWifiConnection(String ssid, String password) {
+void initWifiConnection(char* ssid, char* password) {
     // Conectar a red externa como cliente
     Serial.print("Conectando a WiFi: ");
     SerialBT.print("Conectando a WiFi: ");
