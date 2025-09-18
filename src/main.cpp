@@ -33,15 +33,6 @@ BH1750 Luxometro; // Objeto BH1750
 // ## Bluetooth
 BluetoothSerial SerialBT;
 
-// Datos de acceso a WIFI - ESP32 -> Internet
-// CONFIG (compile-time, en FLASH)
-const char* ssid = "Alumnos";
-const char* password = "@@1umN05@@";
-
-// Datos para conectarse al AP (esp32)
-const char* ap_ssid = "ESP32_AP";
-const char* ap_password = "12345678";
-
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
 static const uint8_t k_ap_maxcl = 4; // Máx. clientes simultáneos
 
@@ -85,14 +76,6 @@ void setup(){
   // Modo combinado: AP + Station (puede conectarse Y crear red)
   WiFi.mode(WIFI_AP_STA);
 
-  // Conectar a red externa como cliente
-  Serial.print("Conectando a WiFi: ");
-  SerialBT.print("Conectando a WiFi: ");
-  Serial.println(ssid);
-  SerialBT.println(ssid);                     
-  
-  WiFi.begin(ssid, password);
-
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print("--- Conectando ---");
@@ -106,30 +89,7 @@ void setup(){
   Serial.println(WiFi.localIP());
   SerialBT.println(WiFi.localIP());               
 
-  // Crear Access Point propio
-  ap_start();
 
-  // DNS server para redirigir tráfico del AP
-  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-
-  Serial.print("Access Point creado. IP del AP: ");
-  Serial.println(WiFi.softAPIP());
-  SerialBT.print("Access Point creado. IP del AP: ");
-  SerialBT.println(WiFi.softAPIP());
-
-  if(!SPIFFS.begin(true)){
-    Serial.println("Error montando SPIFFS");
-    return;
-  }
-
-  // Configurar manejadores del servidor web
-  server.on("/", handleRoot);
-  server.on("/index.html", handleRoot);
-  server.on("/generate_204", handleRoot);    // Android captive portal detection
-  server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
-  server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
-  server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
-  server.begin();
 
   // ## Inicializar BH1750
   Wire.begin(); // iniciar protocolo I2C
@@ -235,7 +195,7 @@ int SeleccionarOpcion(){
 
 // ## Access Point
 // ### Configuración
-void ap_start(void) {
+void ap_start(char* ap_ssid, char* ap_password) {
   // Subred estándar del SoftAP: 192.168.4.0/24; el ESP32 será 192.168.4.1
   const IPAddress ip (192,168,4,1);
   const IPAddress gw (192,168,4,1); // gateway = IP del AP
@@ -269,4 +229,41 @@ void handleRoot() {
 // Manejar cualquier petición no encontrada
 void handleNotFound() {
   handleRoot();
+}
+
+void initWifiConnection(String ssid, String password) {
+    // Conectar a red externa como cliente
+    Serial.print("Conectando a WiFi: ");
+    SerialBT.print("Conectando a WiFi: ");
+    Serial.println(ssid);
+    SerialBT.println(ssid);                     
+    
+    WiFi.begin(ssid, password);
+}
+
+void initiAP(char* ap_ssid, char* ap_password ) {
+    // Crear Access Point propio
+    ap_start(ap_ssid, ap_password);
+
+    // DNS server para redirigir tráfico del AP
+    dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+  
+    Serial.print("Access Point creado. IP del AP: ");
+    Serial.println(WiFi.softAPIP());
+    SerialBT.print("Access Point creado. IP del AP: ");
+    SerialBT.println(WiFi.softAPIP());
+  
+    if(!SPIFFS.begin(true)){
+      Serial.println("Error montando SPIFFS");
+      return;
+    }
+  
+    // Configurar manejadores del servidor web
+    server.on("/", handleRoot);
+    server.on("/index.html", handleRoot);
+    server.on("/generate_204", handleRoot);    // Android captive portal detection
+    server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
+    server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
+    server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
+    server.begin();
 }
