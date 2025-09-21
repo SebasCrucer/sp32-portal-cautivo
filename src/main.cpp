@@ -71,9 +71,13 @@ float LecturaLuxometro();
 // ## Interfaz
 int SeleccionarOpcion();
 
+// ## Conexión WiFi
+void initWifiConnection(char*, char*);
+
 // ## Access Point
-void ap_start(void); // Inicializa SoftAP (IP/gateway/máscara + SSID/clave)
+void ap_start(char*, char*); // Inicializa SoftAP (IP/gateway/máscara + SSID/clave)
 IPAddress ap_ip(void); // Devuelve la IP actual del AP (sin guardar global)
+void initiAP();
 
 // ## Portal cautivo
 void handleRoot();
@@ -160,8 +164,8 @@ void loop(){
         int Intentos = 0;
         while ((WiFi.status() != WL_CONNECTED) && (Intentos <= IntentosConexion)) {
           delay(500);
-          Serial.print("--- Conectando ---");
-          SerialBT.print("--- Conectando ---");
+          Serial.println("--- Conectando ---");
+          SerialBT.println("--- Conectando ---");
           Intentos++;                       
         }
 
@@ -178,29 +182,7 @@ void loop(){
       delay(1000); 
     } else if (Eleccion == 4){
         // Crear Access Point propio
-        ap_start();
-
-        // DNS server para redirigir tráfico del AP
-        dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-
-        Serial.print("Access Point creado. IP del AP: ");
-        Serial.println(WiFi.softAPIP());
-        SerialBT.print("Access Point creado. IP del AP: ");
-        SerialBT.println(WiFi.softAPIP());
-
-        if(!SPIFFS.begin(true)){
-          Serial.println("Error montando SPIFFS");
-          return;
-        }
-
-          // Configurar manejadores del servidor web
-          server.on("/", handleRoot);
-          server.on("/index.html", handleRoot);
-          server.on("/generate_204", handleRoot);    // Android captive portal detection
-          server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
-          server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
-          server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
-          server.begin();
+        initiAP(ap_ssid, ap_password);
       }
   delay(10);
   MenuMostrado = false;
@@ -223,8 +205,6 @@ float LecturaLuxometro(){
 
 // ### Mostrar menu
 int SeleccionarOpcion(){
- 
-
 
   if (SerialBT.available() > 0) {
     String entrada = SerialBT.readStringUntil('\n');
@@ -249,7 +229,7 @@ int SeleccionarOpcion(){
 
 // ## Access Point
 // ### Configuración
-void ap_start(void) {
+void ap_start(char* ap_ssid, char* ap_password) {
   // Subred estándar del SoftAP: 192.168.4.0/24; el ESP32 será 192.168.4.1
   const IPAddress ip (192,168,4,1);
   const IPAddress gw (192,168,4,1); // gateway = IP del AP
@@ -285,11 +265,40 @@ void handleNotFound() {
   handleRoot();
 }
 
-void VerificarCliente(){
-  char AskedSSID[20];
-  char AskedPass[20];
 
-  Serial.println("Introduce el SSID de la red a la que te quieras conectar.");
-  SerialBT.println("");
+void initWifiConnection(char* ssid, char* password) {
+    // Conectar a red externa como cliente
+    Serial.print("Conectando a WiFi: ");
+    SerialBT.print("Conectando a WiFi: ");
+    Serial.println(ssid);
+    SerialBT.println(ssid);                     
+    
+    WiFi.begin(ssid, password);
+}
 
+void initiAP(char* ap_ssid, char* ap_password) {
+    // Crear Access Point propio
+    ap_start(ap_ssid, ap_password);
+
+    // DNS server para redirigir tráfico del AP
+    dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+  
+    Serial.print("Access Point creado. IP del AP: ");
+    Serial.println(WiFi.softAPIP());
+    SerialBT.print("Access Point creado. IP del AP: ");
+    SerialBT.println(WiFi.softAPIP());
+  
+    if(!SPIFFS.begin(true)){
+      Serial.println("Error montando SPIFFS");
+      return;
+    }
+  
+    // Configurar manejadores del servidor web
+    server.on("/", handleRoot);
+    server.on("/index.html", handleRoot);
+    server.on("/generate_204", handleRoot);    // Android captive portal detection
+    server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
+    server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
+    server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
+    server.begin();
 }
