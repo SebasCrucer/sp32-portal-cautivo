@@ -44,7 +44,6 @@ char ap_ssid[20] = "AP-ESP32";
 char ap_password[20] = "12345678";
 
 // CONFIG (compile-time, en FLASH)
-
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
 static const uint8_t k_ap_maxcl = 4; // Máx. clientes simultáneos
 
@@ -92,7 +91,16 @@ void setup(){
   // Modo combinado: AP + Station (puede conectarse Y crear red)
   WiFi.mode(WIFI_AP_STA);
 
+
   /*
+  NOTA: esta sección se retiene por si acaso.
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("--- Conectando ---");
+    SerialBT.print("--- Conectando ---");                       
+  }
+
+
   Serial.println("\nWiFi conectado como cliente :)");
   SerialBT.println("\nWiFi conectado como cliente :)"); 
   Serial.print("IP como cliente: ");
@@ -265,7 +273,6 @@ void handleNotFound() {
   handleRoot();
 }
 
-
 void initWifiConnection(char* ssid, char* password) {
     // Conectar a red externa como cliente
     Serial.print("Conectando a WiFi: ");
@@ -275,6 +282,7 @@ void initWifiConnection(char* ssid, char* password) {
     
     WiFi.begin(ssid, password);
 }
+
 
 void initiAP(char* ap_ssid, char* ap_password) {
     // Crear Access Point propio
