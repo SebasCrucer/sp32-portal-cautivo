@@ -77,7 +77,7 @@ void initWifiConnection(char*, char*);
 // ## Access Point
 void ap_start(char*, char*); // Inicializa SoftAP (IP/gateway/máscara + SSID/clave)
 IPAddress ap_ip(void); // Devuelve la IP actual del AP (sin guardar global)
-void initiAP();
+void initiAP(char*, char*);
 
 // ## Portal cautivo
 void handleRoot();
