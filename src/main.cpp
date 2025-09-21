@@ -22,6 +22,8 @@
 
 // # Variables
 #define CantidadLecturas 25
+#define IntentosConexion 10
+bool MenuMostrado = false;
 
 // ## KY-037
 #define MicrofonoAnalogo 34
@@ -34,13 +36,14 @@ BH1750 Luxometro; // Objeto BH1750
 BluetoothSerial SerialBT;
 
 // Datos de acceso a WIFI - ESP32 -> Internet
-// CONFIG (compile-time, en FLASH)
-const char* ssid = "Alumnos";
-const char* password = "@@1umN05@@";
 
-// Datos para conectarse al AP (esp32)
-const char* ap_ssid = "ESP32_AP";
-const char* ap_password = "12345678";
+// Para evitar problemas con declaraciones en el futuro.
+String ssid;
+String password;
+char ap_ssid[20] = "AP-ESP32";
+char ap_password[20] = "12345678";
+
+// CONFIG (compile-time, en FLASH)
 
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
 static const uint8_t k_ap_maxcl = 4; // Máx. clientes simultáneos
@@ -85,51 +88,14 @@ void setup(){
   // Modo combinado: AP + Station (puede conectarse Y crear red)
   WiFi.mode(WIFI_AP_STA);
 
-  // Conectar a red externa como cliente
-  Serial.print("Conectando a WiFi: ");
-  SerialBT.print("Conectando a WiFi: ");
-  Serial.println(ssid);
-  SerialBT.println(ssid);                     
-  
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print("--- Conectando ---");
-    SerialBT.print("--- Conectando ---");                       
-  }
-
+  /*
   Serial.println("\nWiFi conectado como cliente :)");
   SerialBT.println("\nWiFi conectado como cliente :)"); 
   Serial.print("IP como cliente: ");
   SerialBT.print("IP como cliente: ");               
   Serial.println(WiFi.localIP());
   SerialBT.println(WiFi.localIP());               
-
-  // Crear Access Point propio
-  ap_start();
-
-  // DNS server para redirigir tráfico del AP
-  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-
-  Serial.print("Access Point creado. IP del AP: ");
-  Serial.println(WiFi.softAPIP());
-  SerialBT.print("Access Point creado. IP del AP: ");
-  SerialBT.println(WiFi.softAPIP());
-
-  if(!SPIFFS.begin(true)){
-    Serial.println("Error montando SPIFFS");
-    return;
-  }
-
-  // Configurar manejadores del servidor web
-  server.on("/", handleRoot);
-  server.on("/index.html", handleRoot);
-  server.on("/generate_204", handleRoot);    // Android captive portal detection
-  server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
-  server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
-  server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
-  server.begin();
+  */
 
   // ## Inicializar BH1750
   Wire.begin(); // iniciar protocolo I2C
@@ -140,6 +106,20 @@ void setup(){
 void loop(){
   dnsServer.processNextRequest();
   server.handleClient();
+
+  if(!SerialBT.hasClient()){
+    MenuMostrado = false;
+    return; // Salida de loop.
+  }
+
+  if(!MenuMostrado){
+    char buffer[1000];
+    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point", CantidadLecturas, CantidadLecturas);
+    Serial.println(buffer);
+    SerialBT.println(buffer);
+    MenuMostrado = true;
+  }
+  
   
   // Solo ejecutar sensores si hay comando por Bluetooth
   if (SerialBT.available() > 0) {
@@ -175,8 +155,17 @@ void loop(){
         server.handleClient();
       }
     } else if (Eleccion == 3) {
+        // Solicitar SSID y contraseña desde aquí. 
+
+        int Intentos = 0;
+        while ((WiFi.status() != WL_CONNECTED) && (Intentos <= IntentosConexion)) {
+          delay(500);
+          Serial.print("--- Conectando ---");
+          SerialBT.print("--- Conectando ---");
+          Intentos++;                       
+        }
+
         if (WiFi.status() == WL_CONNECTED) {
-      
           char buffer[100];
           sprintf(buffer, "Red: %s\n  IP: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
       
@@ -187,10 +176,35 @@ void loop(){
           SerialBT.println("No conectado a ninguna red WiFi.");
         }
       delay(1000); 
-    }
-  }
-  
+    } else if (Eleccion == 4){
+        // Crear Access Point propio
+        ap_start();
+
+        // DNS server para redirigir tráfico del AP
+        dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+
+        Serial.print("Access Point creado. IP del AP: ");
+        Serial.println(WiFi.softAPIP());
+        SerialBT.print("Access Point creado. IP del AP: ");
+        SerialBT.println(WiFi.softAPIP());
+
+        if(!SPIFFS.begin(true)){
+          Serial.println("Error montando SPIFFS");
+          return;
+        }
+
+          // Configurar manejadores del servidor web
+          server.on("/", handleRoot);
+          server.on("/index.html", handleRoot);
+          server.on("/generate_204", handleRoot);    // Android captive portal detection
+          server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
+          server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
+          server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
+          server.begin();
+      }
   delay(10);
+  MenuMostrado = false;
+  }
 }
 
 // ## Funciones detalladas
@@ -209,10 +223,8 @@ float LecturaLuxometro(){
 
 // ### Mostrar menu
 int SeleccionarOpcion(){
-  char buffer[1000];
-  sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)", CantidadLecturas, CantidadLecturas);
-  Serial.println(buffer);
-  SerialBT.println(buffer);
+ 
+
 
   if (SerialBT.available() > 0) {
     String entrada = SerialBT.readStringUntil('\n');
@@ -224,6 +236,8 @@ int SeleccionarOpcion(){
       return 2;
     } else if(opcion == '3'){
       return 3;
+    } else if(opcion == '4'){
+      return 4;
     } else {
       Serial.println("ADVERTENCIA - Opción inválida.");
       SerialBT.println("ADVERTENCIA - Opción inválida.");
@@ -269,4 +283,13 @@ void handleRoot() {
 // Manejar cualquier petición no encontrada
 void handleNotFound() {
   handleRoot();
+}
+
+void VerificarCliente(){
+  char AskedSSID[20];
+  char AskedPass[20];
+
+  Serial.println("Introduce el SSID de la red a la que te quieras conectar.");
+  SerialBT.println("");
+
 }
