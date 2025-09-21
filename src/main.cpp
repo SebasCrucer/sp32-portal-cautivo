@@ -35,8 +35,8 @@ BH1750 Luxometro; // Objeto BH1750
 // ## Bluetooth
 BluetoothSerial SerialBT;
 
-// Datos de acceso a WIFI - ESP32 -> Internet
 
+// Datos de acceso a WIFI - ESP32 -> Internet
 // Para evitar problemas con declaraciones en el futuro.
 String ssid;
 String password;
@@ -44,7 +44,6 @@ char ap_ssid[20] = "AP-ESP32";
 char ap_password[20] = "12345678";
 
 // CONFIG (compile-time, en FLASH)
-
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
 static const uint8_t k_ap_maxcl = 4; // Máx. clientes simultáneos
 
@@ -93,6 +92,12 @@ void setup(){
   WiFi.mode(WIFI_AP_STA);
 
   /*
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print("--- Conectando ---");
+    SerialBT.print("--- Conectando ---");                       
+  }
+
   Serial.println("\nWiFi conectado como cliente :)");
   SerialBT.println("\nWiFi conectado como cliente :)"); 
   Serial.print("IP como cliente: ");
@@ -264,7 +269,6 @@ void handleRoot() {
 void handleNotFound() {
   handleRoot();
 }
-
 
 void initWifiConnection(char* ssid, char* password) {
     // Conectar a red externa como cliente
