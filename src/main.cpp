@@ -22,6 +22,8 @@
 
 // # Variables
 #define CantidadLecturas 25
+#define IntentosConexion 10
+bool MenuMostrado = false;
 
 // ## KY-037
 #define MicrofonoAnalogo 34
@@ -33,6 +35,15 @@ BH1750 Luxometro; // Objeto BH1750
 // ## Bluetooth
 BluetoothSerial SerialBT;
 
+// Datos de acceso a WIFI - ESP32 -> Internet
+
+// Para evitar problemas con declaraciones en el futuro.
+String ssid;
+String password;
+char ap_ssid[20] = "AP-ESP32";
+char ap_password[20] = "12345678";
+
+// CONFIG (compile-time, en FLASH)
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
 static const uint8_t k_ap_maxcl = 4; // Máx. clientes simultáneos
 
@@ -59,9 +70,13 @@ float LecturaLuxometro();
 // ## Interfaz
 int SeleccionarOpcion();
 
+// ## Conexión WiFi
+void initWifiConnection(char*, char*);
+
 // ## Access Point
-void ap_start(void); // Inicializa SoftAP (IP/gateway/máscara + SSID/clave)
+void ap_start(char*, char*); // Inicializa SoftAP (IP/gateway/máscara + SSID/clave)
 IPAddress ap_ip(void); // Devuelve la IP actual del AP (sin guardar global)
+void initiAP(char*, char*);
 
 // ## Portal cautivo
 void handleRoot();
@@ -76,11 +91,15 @@ void setup(){
   // Modo combinado: AP + Station (puede conectarse Y crear red)
   WiFi.mode(WIFI_AP_STA);
 
+
+  /*
+  NOTA: esta sección se retiene por si acaso.
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print("--- Conectando ---");
     SerialBT.print("--- Conectando ---");                       
   }
+
 
   Serial.println("\nWiFi conectado como cliente :)");
   SerialBT.println("\nWiFi conectado como cliente :)"); 
@@ -88,8 +107,7 @@ void setup(){
   SerialBT.print("IP como cliente: ");               
   Serial.println(WiFi.localIP());
   SerialBT.println(WiFi.localIP());               
-
-
+  */
 
   // ## Inicializar BH1750
   Wire.begin(); // iniciar protocolo I2C
@@ -100,6 +118,20 @@ void setup(){
 void loop(){
   dnsServer.processNextRequest();
   server.handleClient();
+
+  if(!SerialBT.hasClient()){
+    MenuMostrado = false;
+    return; // Salida de loop.
+  }
+
+  if(!MenuMostrado){
+    char buffer[1000];
+    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point", CantidadLecturas, CantidadLecturas);
+    Serial.println(buffer);
+    SerialBT.println(buffer);
+    MenuMostrado = true;
+  }
+  
   
   // Solo ejecutar sensores si hay comando por Bluetooth
   if (SerialBT.available() > 0) {
@@ -135,8 +167,17 @@ void loop(){
         server.handleClient();
       }
     } else if (Eleccion == 3) {
+        // Solicitar SSID y contraseña desde aquí. 
+
+        int Intentos = 0;
+        while ((WiFi.status() != WL_CONNECTED) && (Intentos <= IntentosConexion)) {
+          delay(500);
+          Serial.println("--- Conectando ---");
+          SerialBT.println("--- Conectando ---");
+          Intentos++;                       
+        }
+
         if (WiFi.status() == WL_CONNECTED) {
-      
           char buffer[100];
           sprintf(buffer, "Red: %s\n  IP: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
       
@@ -147,10 +188,13 @@ void loop(){
           SerialBT.println("No conectado a ninguna red WiFi.");
         }
       delay(1000); 
-    }
-  }
-  
+    } else if (Eleccion == 4){
+        // Crear Access Point propio
+        initiAP(ap_ssid, ap_password);
+      }
   delay(10);
+  MenuMostrado = false;
+  }
 }
 
 // ## Funciones detalladas
@@ -169,10 +213,6 @@ float LecturaLuxometro(){
 
 // ### Mostrar menu
 int SeleccionarOpcion(){
-  char buffer[1000];
-  sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)", CantidadLecturas, CantidadLecturas);
-  Serial.println(buffer);
-  SerialBT.println(buffer);
 
   if (SerialBT.available() > 0) {
     String entrada = SerialBT.readStringUntil('\n');
@@ -184,6 +224,8 @@ int SeleccionarOpcion(){
       return 2;
     } else if(opcion == '3'){
       return 3;
+    } else if(opcion == '4'){
+      return 4;
     } else {
       Serial.println("ADVERTENCIA - Opción inválida.");
       SerialBT.println("ADVERTENCIA - Opción inválida.");
@@ -241,7 +283,8 @@ void initWifiConnection(char* ssid, char* password) {
     WiFi.begin(ssid, password);
 }
 
-void initiAP(char* ap_ssid, char* ap_password ) {
+
+void initiAP(char* ap_ssid, char* ap_password) {
     // Crear Access Point propio
     ap_start(ap_ssid, ap_password);
 
