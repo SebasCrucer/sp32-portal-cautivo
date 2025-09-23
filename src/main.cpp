@@ -12,6 +12,12 @@
 // Terminal serial Bluetooth
 #include "BluetoothSerial.h"
 
+// BLE
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -34,6 +40,13 @@ BH1750 Luxometro; // Objeto BH1750
 
 // ## Bluetooth
 BluetoothSerial SerialBT;
+
+// --- Configuración para BLE ---
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+BLECharacteristic *pCharacteristic;
+bool modoBLEActivo = false;
 
 // Datos de acceso a WIFI - ESP32 -> Internet
 
@@ -82,6 +95,9 @@ void initiAP(char*, char*);
 void handleRoot();
 void handleNotFound();
 
+// ## BLE
+void activarModoBLE();
+
 // # Setup + Loop
 void setup(){
   Serial.begin(9600);
@@ -116,6 +132,23 @@ void setup(){
 }
 
 void loop(){
+  // Si el modo BLE está activo, procesar datos BLE
+  if (modoBLEActivo) {
+    float luxValue = LecturaLuxometro();
+    std::array<float, 2> micValue = LecturaMicrofono();
+    
+    String sensorData = "Lux:" + String(luxValue) + ",Mic:" + String(micValue[1]);
+    
+    pCharacteristic->setValue(sensorData.c_str());
+    pCharacteristic->notify();
+    
+    Serial.print("Valor BLE actualizado: ");
+    Serial.println(sensorData);
+    
+    delay(2000);
+    return;
+  }
+
   dnsServer.processNextRequest();
   server.handleClient();
 
@@ -123,10 +156,9 @@ void loop(){
     MenuMostrado = false;
     return; // Salida de loop.
   }
-
   if(!MenuMostrado){
     char buffer[1000];
-    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point", CantidadLecturas, CantidadLecturas);
+    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)", CantidadLecturas, CantidadLecturas);
     Serial.println(buffer);
     SerialBT.println(buffer);
     MenuMostrado = true;
@@ -167,30 +199,57 @@ void loop(){
         server.handleClient();
       }
     } else if (Eleccion == 3) {
-        // Solicitar SSID y contraseña desde aquí. 
-
+        // Conectar a WiFi
+        Serial.println("Escribe el SSID:");
+        SerialBT.println("Escribe el SSID:");
+        
+        // Esperar SSID
+        while(!SerialBT.available()) {
+          delay(10);
+        }
+        ssid = SerialBT.readStringUntil('\n');
+        ssid.trim();
+        
+        Serial.println("Escribe la contraseña:");
+        SerialBT.println("Escribe la contraseña:");
+        
+        // Esperar contraseña
+        while(!SerialBT.available()) {
+          delay(10);
+        }
+        password = SerialBT.readStringUntil('\n');
+        password.trim();
+        
+        // Conectar
+        WiFi.begin(ssid.c_str(), password.c_str());
+        
         int Intentos = 0;
-        while ((WiFi.status() != WL_CONNECTED) && (Intentos <= IntentosConexion)) {
+        while ((WiFi.status() != WL_CONNECTED) && (Intentos < IntentosConexion)) {
           delay(500);
-          Serial.println("--- Conectando ---");
-          SerialBT.println("--- Conectando ---");
           Intentos++;                       
         }
-
+        
         if (WiFi.status() == WL_CONNECTED) {
-          char buffer[100];
-          sprintf(buffer, "Red: %s\n  IP: %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
-      
-          Serial.println(buffer);
-          SerialBT.println(buffer);
+          Serial.print("IP: ");
+          Serial.println(WiFi.localIP());
+          SerialBT.print("IP: ");
+          SerialBT.println(WiFi.localIP());
         } else { 
-          Serial.println("No conectado a ninguna red WiFi.");
-          SerialBT.println("No conectado a ninguna red WiFi.");
+          Serial.println("No se pudo conectar");
+          SerialBT.println("No se pudo conectar");
         }
-      delay(1000); 
-    } else if (Eleccion == 4){
+      delay(1000);    } else if (Eleccion == 4){
         // Crear Access Point propio
         initiAP(ap_ssid, ap_password);
+    } else if (Eleccion == 5){
+        // Cambiar a modo BLE
+        Serial.println("Cambiando a modo BLE. Te desconectarás del Bluetooth Clásico.");
+        SerialBT.println("Cambiando a modo BLE. Te desconectarás.");
+        delay(1000);
+        
+        SerialBT.end(); // Terminar Bluetooth Clásico
+        activarModoBLE();
+        modoBLEActivo = true;
       }
   delay(10);
   MenuMostrado = false;
@@ -223,9 +282,10 @@ int SeleccionarOpcion(){
     } else if(opcion == '2'){
       return 2;
     } else if(opcion == '3'){
-      return 3;
-    } else if(opcion == '4'){
+      return 3;    } else if(opcion == '4'){
       return 4;
+    } else if(opcion == '5' || opcion == 'B' || opcion == 'b'){
+      return 5;
     } else {
       Serial.println("ADVERTENCIA - Opción inválida.");
       SerialBT.println("ADVERTENCIA - Opción inválida.");
@@ -309,4 +369,24 @@ void initiAP(char* ap_ssid, char* ap_password) {
     server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
     server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
     server.begin();
+}
+
+// ## BLE
+void activarModoBLE() {
+  Serial.println("Iniciando BLE...");
+  
+  BLEDevice::init("ESP32_Sensores_BLE");
+  BLEServer *pServer = BLEDevice::createServer();
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+  
+  pCharacteristic = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_READ |
+                      BLECharacteristic::PROPERTY_NOTIFY
+                    );
+  
+  pService->start();
+  BLEDevice::getAdvertising()->start();
+  
+  Serial.println("BLE iniciado. Busca 'ESP32_Sensores_BLE'");
 }
