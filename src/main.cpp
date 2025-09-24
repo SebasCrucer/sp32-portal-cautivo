@@ -43,9 +43,12 @@ BluetoothSerial SerialBT;
 
 // --- Configuración para BLE ---
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define CHARACTERISTIC_UUID_1 "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define CHARACTERISTIC_UUID_2 "beb5483e-36e1-4688-b7f5-ea07361b26a9"
 
-BLECharacteristic *pCharacteristic;
+BLECharacteristic *pCharacteristic_1;
+BLECharacteristic *pCharacteristic_2;
+
 bool modoBLEActivo = false;
 
 // Datos de acceso a WIFI - ESP32 -> Internet
@@ -137,13 +140,19 @@ void loop(){
     float luxValue = LecturaLuxometro();
     std::array<float, 2> micValue = LecturaMicrofono();
     
-    String sensorData = "Lux:" + String(luxValue) + ",Mic:" + String(micValue[1]);
+    String sensorData1 = "Lux:" + String(luxValue);
     
-    pCharacteristic->setValue(sensorData.c_str());
-    pCharacteristic->notify();
+    pCharacteristic_1->setValue(sensorData1.c_str());
+    pCharacteristic_1->notify();
+
+    String sensorData2 = "Mic:" + String(micValue[1]);
+    
+    pCharacteristic_2->setValue(sensorData2.c_str());
+    pCharacteristic_2->notify();
     
     Serial.print("Valor BLE actualizado: ");
-    Serial.println(sensorData);
+    Serial.println(sensorData1);
+    Serial.println(sensorData2);
     
     delay(2000);
     return;
@@ -375,15 +384,21 @@ void initiAP(char* ap_ssid, char* ap_password) {
 void activarModoBLE() {
   Serial.println("Iniciando BLE...");
   
-  BLEDevice::init("ESP32_Sensores_BLE");
+  BLEDevice::init("NO_ERECCION_Sensores_BLE_2004");
   BLEServer *pServer = BLEDevice::createServer();
   BLEService *pService = pServer->createService(SERVICE_UUID);
   
-  pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
+  pCharacteristic_1 = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID_1,
                       BLECharacteristic::PROPERTY_READ |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
+
+  pCharacteristic_2 = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID_2,
+                      BLECharacteristic::PROPERTY_READ |
+                      BLECharacteristic::PROPERTY_NOTIFY
+                    );                    
   
   pService->start();
   BLEDevice::getAdvertising()->start();
