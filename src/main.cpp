@@ -59,7 +59,7 @@ String ssid;
 String password;
 char ap_ssid[20] = "AP-ESP32";
 char ap_password[20] = "12345678";
-const char* urlServidor = "http://89.117.53.122:8001/datosEx";
+const char* urlServidor = "http://89.117.53.122:8001/";
 
 // CONFIG (compile-time, en FLASH)
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
