@@ -21,6 +21,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <HTTPClient.h>
 
 // Librerías para exponer un archivo
 #include <FS.h>
@@ -58,6 +59,7 @@ String ssid;
 String password;
 char ap_ssid[20] = "AP-ESP32";
 char ap_password[20] = "12345678";
+const char* urlServidor = "http://89.117.53.122:8001/datosEx";
 
 // CONFIG (compile-time, en FLASH)
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
@@ -167,7 +169,7 @@ void loop(){
   }
   if(!MenuMostrado){
     char buffer[1000];
-    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)", CantidadLecturas, CantidadLecturas);
+    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)\n6. Mandar lecturas de prueba al servidor", CantidadLecturas, CantidadLecturas);
     Serial.println(buffer);
     SerialBT.println(buffer);
     MenuMostrado = true;
@@ -247,7 +249,8 @@ void loop(){
           Serial.println("No se pudo conectar");
           SerialBT.println("No se pudo conectar");
         }
-      delay(1000);    } else if (Eleccion == 4){
+      delay(1000);   
+    } else if (Eleccion == 4){
         // Crear Access Point propio
         initiAP(ap_ssid, ap_password);
     } else if (Eleccion == 5){
@@ -259,9 +262,43 @@ void loop(){
         SerialBT.end(); // Terminar Bluetooth Clásico
         activarModoBLE();
         modoBLEActivo = true;
+      } else if (Eleccion == 6){
+        // Envío de datos de prueba
+        if(WiFi.status() == WL_CONNECTED){ // El envío de datos sólo se hace si hay conexión a Internet
+          HTTPClient http; // Objeto HTTPClient
+          http.begin(urlServidor); // Este será el endpoint del servidor.
+          http.addHeader("Content-Type", "application/json"); // Cabecera, indica que los datos están en formato JSON.
+
+          for (int i = 0; i < CantidadLecturas; i++){
+            // Lectura de sensores
+            std::array<float, 2> Sonido = LecturaMicrofono();
+            float Lux = LecturaLuxometro();
+            
+            String jsonPayload = "{ \"sonido_digital\":" + String((int)Sonido[0]) + ",\"voltaje\":" + String(Sonido[1]) + ",\"lux\":" + String(Lux) + "}";
+
+            // 3. Enviar la petición POST y obtener el código de respuesta
+            int httpResponseCode = http.POST(jsonPayload);
+
+            // 4. Verificar la respuesta del servidor
+            if (httpResponseCode > 0) {
+              String response = http.getString();
+              Serial.print("Código de respuesta HTTP: "); Serial.println(httpResponseCode);
+              Serial.print("Respuesta del servidor: "); Serial.println(response);
+            } else {
+              Serial.print("Error en la petición HTTP. Código: "); Serial.println(httpResponseCode);
+            }
+          }
+
+          // liberar los recursos
+          http.end();
+
+        } else {
+          Serial.println("Error en la conexión Wi-Fi");
+        }
+
+        delay(10000); // Esperar 10 segundos para el siguiente envío
+        MenuMostrado = false;
       }
-  delay(10);
-  MenuMostrado = false;
   }
 }
 
@@ -295,6 +332,8 @@ int SeleccionarOpcion(){
       return 4;
     } else if(opcion == '5' || opcion == 'B' || opcion == 'b'){
       return 5;
+    } else if(opcion == '6') {
+      return 6;
     } else {
       Serial.println("ADVERTENCIA - Opción inválida.");
       SerialBT.println("ADVERTENCIA - Opción inválida.");
