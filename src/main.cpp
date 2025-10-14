@@ -21,13 +21,11 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <HTTPClient.h>
 
 // Librerías para exponer un archivo
 #include <FS.h>
-#include <SPIFFS.h>
-
-// MQTT
-#include <PubSubClient.h>
+#include <SPIFFS.h> 
 
 // # Variables
 #define CantidadLecturas 25
@@ -59,8 +57,9 @@ bool modoBLEActivo = false;
 // Para evitar problemas con declaraciones en el futuro.
 String ssid;
 String password;
-char ap_ssid[20] = "AP-ESP33";
+char ap_ssid[20] = "AP-ESP32";
 char ap_password[20] = "12345678";
+const char* urlServidor = "http://89.117.53.122:8001/";
 
 // CONFIG (compile-time, en FLASH)
 static const uint8_t k_ap_chan = 6; // Canal recomendado: 1/6/11
@@ -79,22 +78,6 @@ DNSServer dnsServer;
 // Configuración del server (servicio que ofrece el HTML del portal)
 WebServer server(80);
 
-// ------- MQTT Configuration -------
-const char* MQTT_BROKER   = "89.117.53.122";
-const uint16_t MQTT_PORT  = 1883;
-const char* MQTT_USER     = "user1";
-const char* MQTT_PASS     = "user1";
-const char* TOPIC_LUX     = "user1/luxometro";
-const char* TOPIC_MIC     = "user1/microfono";
-const char* TOPIC_STATUS  = "user1/status";
-
-WiFiClient espClient;
-PubSubClient mqttClient(espClient);
-
-char CLIENT_ID[40];
-long lastMqttMsg = 0;
-bool modoMQTTActivo = false;
-const long MQTT_INTERVAL = 10000; // 10 segundos
 
 // # Prototipado de funciones
 
@@ -120,16 +103,11 @@ void handleNotFound();
 // ## BLE
 void activarModoBLE();
 
-// ## MQTT
-void mqttReconnect();
-void activarModoMQTT();
-void publicarDatosMQTT();
-
 // # Setup + Loop
 void setup(){
   Serial.begin(9600);
 
-  SerialBT.begin("Sensores_ESP33"); 
+  SerialBT.begin("Sensores_ESP32"); 
 
   // Modo combinado: AP + Station (puede conectarse Y crear red)
   WiFi.mode(WIFI_AP_STA);
@@ -156,13 +134,6 @@ void setup(){
   Wire.begin(); // iniciar protocolo I2C
   Luxometro.begin(); // Iniciar BH1750
 
-  // ## Configurar MQTT
-  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
-
-  // ## Generar CLIENT_ID único
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  snprintf(CLIENT_ID, sizeof(CLIENT_ID), "esp32-user1-%02X%02X%02X", mac[3], mac[4], mac[5]);
 }
 
 void loop(){
@@ -189,21 +160,6 @@ void loop(){
     return;
   }
 
-  // Si el modo MQTT está activo, procesar datos MQTT
-  if (modoMQTTActivo) {
-    if (!mqttClient.connected()) {
-      mqttReconnect();
-    }
-    mqttClient.loop();
-
-    long now = millis();
-    if (now - lastMqttMsg > MQTT_INTERVAL) {
-      lastMqttMsg = now;
-      publicarDatosMQTT();
-    }
-    return;
-  }
-
   dnsServer.processNextRequest();
   server.handleClient();
 
@@ -213,7 +169,7 @@ void loop(){
   }
   if(!MenuMostrado){
     char buffer[1000];
-    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)\n6. Cambiar a modo MQTT (M)", CantidadLecturas, CantidadLecturas);
+    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)\n6. Mandar lecturas de prueba al servidor", CantidadLecturas, CantidadLecturas);
     Serial.println(buffer);
     SerialBT.println(buffer);
     MenuMostrado = true;
@@ -293,7 +249,8 @@ void loop(){
           Serial.println("No se pudo conectar");
           SerialBT.println("No se pudo conectar");
         }
-      delay(1000);    } else if (Eleccion == 4){
+      delay(1000);   
+    } else if (Eleccion == 4){
         // Crear Access Point propio
         initiAP(ap_ssid, ap_password);
     } else if (Eleccion == 5){
@@ -305,18 +262,43 @@ void loop(){
         SerialBT.end(); // Terminar Bluetooth Clásico
         activarModoBLE();
         modoBLEActivo = true;
-    } else if (Eleccion == 6){
-        // Cambiar a modo MQTT
-        Serial.println("Cambiando a modo MQTT. Te desconectarás del Bluetooth Clásico.");
-        SerialBT.println("Cambiando a modo MQTT. Te desconectarás.");
-        delay(1000);
-        
-        SerialBT.end();
-        activarModoMQTT();
-        modoMQTTActivo = true;
+      } else if (Eleccion == 6){
+        // Envío de datos de prueba
+        if(WiFi.status() == WL_CONNECTED){ // El envío de datos sólo se hace si hay conexión a Internet
+          HTTPClient http; // Objeto HTTPClient
+          http.begin(urlServidor); // Este será el endpoint del servidor.
+          http.addHeader("Content-Type", "application/json"); // Cabecera, indica que los datos están en formato JSON.
+
+          for (int i = 0; i < CantidadLecturas; i++){
+            // Lectura de sensores
+            std::array<float, 2> Sonido = LecturaMicrofono();
+            float Lux = LecturaLuxometro();
+            
+            String jsonPayload = "{ \"sonido_digital\":" + String((int)Sonido[0]) + ",\"voltaje\":" + String(Sonido[1]) + ",\"lux\":" + String(Lux) + "}";
+
+            // 3. Enviar la petición POST y obtener el código de respuesta
+            int httpResponseCode = http.POST(jsonPayload);
+
+            // 4. Verificar la respuesta del servidor
+            if (httpResponseCode > 0) {
+              String response = http.getString();
+              Serial.print("Código de respuesta HTTP: "); Serial.println(httpResponseCode);
+              Serial.print("Respuesta del servidor: "); Serial.println(response);
+            } else {
+              Serial.print("Error en la petición HTTP. Código: "); Serial.println(httpResponseCode);
+            }
+          }
+
+          // liberar los recursos
+          http.end();
+
+        } else {
+          Serial.println("Error en la conexión Wi-Fi");
+        }
+
+        delay(10000); // Esperar 10 segundos para el siguiente envío
+        MenuMostrado = false;
       }
-  delay(10);
-  MenuMostrado = false;
   }
 }
 
@@ -346,12 +328,11 @@ int SeleccionarOpcion(){
     } else if(opcion == '2'){
       return 2;
     } else if(opcion == '3'){
-      return 3;
-    } else if(opcion == '4'){
+      return 3;    } else if(opcion == '4'){
       return 4;
     } else if(opcion == '5' || opcion == 'B' || opcion == 'b'){
       return 5;
-    } else if(opcion == '6' || opcion == 'M' || opcion == 'm'){
+    } else if(opcion == '6') {
       return 6;
     } else {
       Serial.println("ADVERTENCIA - Opción inválida.");
@@ -442,7 +423,7 @@ void initiAP(char* ap_ssid, char* ap_password) {
 void activarModoBLE() {
   Serial.println("Iniciando BLE...");
   
-  BLEDevice::init("Sensores_BLE_ESP32");
+  BLEDevice::init("NO_ERECCION_Sensores_BLE_2004");
   BLEServer *pServer = BLEDevice::createServer();
   BLEService *pService = pServer->createService(SERVICE_UUID);
   
@@ -461,63 +442,5 @@ void activarModoBLE() {
   pService->start();
   BLEDevice::getAdvertising()->start();
   
-  Serial.println("BLE iniciado. Busca 'Sensores_BLE_ESP32'");
-}
-
-// ## MQTT
-void mqttReconnect() {
-  while (!mqttClient.connected()) {
-    Serial.print("Intentando conexión MQTT...");
-    if (mqttClient.connect(CLIENT_ID, MQTT_USER, MQTT_PASS, TOPIC_STATUS, 0, false, "offline")) {
-      Serial.println("conectado");
-      mqttClient.publish(TOPIC_STATUS, "online");
-    } else {
-      Serial.print("falló, rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(" reintento en 3s");
-      delay(3000);
-    }
-  }
-}
-
-void activarModoMQTT() {
-  Serial.println("Iniciando modo MQTT...");
-  
-  // Verificar conexión WiFi
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("ERROR: No hay conexión WiFi. Primero conecta a una red (opción 3)");
-    modoMQTTActivo = false;
-    return;
-  }
-  
-  Serial.print("WiFi conectado, IP: ");
-  Serial.println(WiFi.localIP());
-  
-  mqttReconnect();
-  
-  Serial.println("Modo MQTT activado. Publicando datos cada 10 segundos...");
-}
-
-void publicarDatosMQTT() {
-  // Leer sensores
-  float luxValue = LecturaLuxometro();
-  std::array<float, 2> micValue = LecturaMicrofono();
-  
-  // Publicar luxómetro
-  char msgLux[16];
-  dtostrf(luxValue, 6, 2, msgLux);
-  mqttClient.publish(TOPIC_LUX, msgLux);
-  Serial.print("Publicado en ");
-  Serial.print(TOPIC_LUX);
-  Serial.print(": ");
-  Serial.println(msgLux);
-  
-  // Publicar micrófono (voltaje)
-  char msgMic[16];
-  dtostrf(micValue[1], 4, 2, msgMic);
-  mqttClient.publish(TOPIC_MIC, msgMic);
-  Serial.print("Publicado en ");
-  Serial.print(TOPIC_MIC);
-  Serial.print(": ");
-  Serial.println(msgMic);
+  Serial.println("BLE iniciado. Busca 'ESP32_Sensores_BLE'");
 }
