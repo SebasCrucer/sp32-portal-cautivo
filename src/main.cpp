@@ -25,7 +25,10 @@
 
 // Librerías para exponer un archivo
 #include <FS.h>
-#include <SPIFFS.h> 
+#include <SPIFFS.h>
+
+// MQTT
+#include <PubSubClient.h>
 
 // # Variables
 #define CantidadLecturas 25
@@ -78,6 +81,22 @@ DNSServer dnsServer;
 // Configuración del server (servicio que ofrece el HTML del portal)
 WebServer server(80);
 
+// ------- MQTT Configuration -------
+const char* MQTT_BROKER   = "89.117.53.122";
+const uint16_t MQTT_PORT  = 1883;
+const char* MQTT_USER     = "user1";
+const char* MQTT_PASS     = "user1";
+const char* TOPIC_LUX     = "user1/luxometro";
+const char* TOPIC_MIC     = "user1/microfono";
+const char* TOPIC_STATUS  = "user1/status";
+
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
+char CLIENT_ID[40];
+long lastMqttMsg = 0;
+bool modoMQTTActivo = false;
+const long MQTT_INTERVAL = 10000; // 10 segundos
 
 // # Prototipado de funciones
 
@@ -103,11 +122,16 @@ void handleNotFound();
 // ## BLE
 void activarModoBLE();
 
+// ## MQTT
+void mqttReconnect();
+void activarModoMQTT();
+void publicarDatosMQTT();
+
 // # Setup + Loop
 void setup(){
   Serial.begin(9600);
 
-  SerialBT.begin("Sensores_ESP32"); 
+  SerialBT.begin("Sensores_ESP33"); 
 
   // Modo combinado: AP + Station (puede conectarse Y crear red)
   WiFi.mode(WIFI_AP_STA);
@@ -134,6 +158,13 @@ void setup(){
   Wire.begin(); // iniciar protocolo I2C
   Luxometro.begin(); // Iniciar BH1750
 
+  // ## Configurar MQTT
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+
+  // ## Generar CLIENT_ID único
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  snprintf(CLIENT_ID, sizeof(CLIENT_ID), "esp32-user1-%02X%02X%02X", mac[3], mac[4], mac[5]);
 }
 
 void loop(){
@@ -160,6 +191,21 @@ void loop(){
     return;
   }
 
+  // Si el modo MQTT está activo, procesar datos MQTT
+  if (modoMQTTActivo) {
+    if (!mqttClient.connected()) {
+      mqttReconnect();
+    }
+    mqttClient.loop();
+
+    long now = millis();
+    if (now - lastMqttMsg > MQTT_INTERVAL) {
+      lastMqttMsg = now;
+      publicarDatosMQTT();
+    }
+    return;
+  }
+
   dnsServer.processNextRequest();
   server.handleClient();
 
@@ -169,7 +215,7 @@ void loop(){
   }
   if(!MenuMostrado){
     char buffer[1000];
-    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)\n6. Mandar lecturas de prueba al servidor", CantidadLecturas, CantidadLecturas);
+    sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)\n6. Mandar lecturas de prueba al servidor\n7. Cambiar a modo MQTT (M)", CantidadLecturas, CantidadLecturas);
     Serial.println(buffer);
     SerialBT.println(buffer);
     MenuMostrado = true;
@@ -298,6 +344,15 @@ void loop(){
 
         delay(10000); // Esperar 10 segundos para el siguiente envío
         MenuMostrado = false;
+      } else if (Eleccion == 7){
+        // Cambiar a modo MQTT
+        Serial.println("Cambiando a modo MQTT. Te desconectarás del Bluetooth Clásico.");
+        SerialBT.println("Cambiando a modo MQTT. Te desconectarás.");
+        delay(1000);
+        
+        SerialBT.end();
+        activarModoMQTT();
+        modoMQTTActivo = true;
       }
   }
 }
@@ -328,12 +383,15 @@ int SeleccionarOpcion(){
     } else if(opcion == '2'){
       return 2;
     } else if(opcion == '3'){
-      return 3;    } else if(opcion == '4'){
+      return 3;
+    } else if(opcion == '4'){
       return 4;
     } else if(opcion == '5' || opcion == 'B' || opcion == 'b'){
       return 5;
     } else if(opcion == '6') {
       return 6;
+    } else if(opcion == '7' || opcion == 'M' || opcion == 'm'){
+      return 7;
     } else {
       Serial.println("ADVERTENCIA - Opción inválida.");
       SerialBT.println("ADVERTENCIA - Opción inválida.");
@@ -423,7 +481,7 @@ void initiAP(char* ap_ssid, char* ap_password) {
 void activarModoBLE() {
   Serial.println("Iniciando BLE...");
   
-  BLEDevice::init("NO_ERECCION_Sensores_BLE_2004");
+  BLEDevice::init("Sensores_BLE_esp33");
   BLEServer *pServer = BLEDevice::createServer();
   BLEService *pService = pServer->createService(SERVICE_UUID);
   
@@ -442,5 +500,63 @@ void activarModoBLE() {
   pService->start();
   BLEDevice::getAdvertising()->start();
   
-  Serial.println("BLE iniciado. Busca 'ESP32_Sensores_BLE'");
+  Serial.println("BLE iniciado. Busca Sensores_BLE_esp33");
+}
+
+// ## MQTT
+void mqttReconnect() {
+  while (!mqttClient.connected()) {
+    Serial.print("Intentando conexión MQTT...");
+    if (mqttClient.connect(CLIENT_ID, MQTT_USER, MQTT_PASS, TOPIC_STATUS, 0, false, "offline")) {
+      Serial.println("conectado");
+      mqttClient.publish(TOPIC_STATUS, "online");
+    } else {
+      Serial.print("falló, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" reintento en 3s");
+      delay(3000);
+    }
+  }
+}
+
+void activarModoMQTT() {
+  Serial.println("Iniciando modo MQTT...");
+  
+  // Verificar conexión WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("ERROR: No hay conexión WiFi. Primero conecta a una red (opción 3)");
+    modoMQTTActivo = false;
+    return;
+  }
+  
+  Serial.print("WiFi conectado, IP: ");
+  Serial.println(WiFi.localIP());
+  
+  mqttReconnect();
+  
+  Serial.println("Modo MQTT activado. Publicando datos cada 10 segundos...");
+}
+
+void publicarDatosMQTT() {
+  // Leer sensores
+  float luxValue = LecturaLuxometro();
+  std::array<float, 2> micValue = LecturaMicrofono();
+  
+  // Publicar luxómetro
+  char msgLux[16];
+  dtostrf(luxValue, 6, 2, msgLux);
+  mqttClient.publish(TOPIC_LUX, msgLux);
+  Serial.print("Publicado en ");
+  Serial.print(TOPIC_LUX);
+  Serial.print(": ");
+  Serial.println(msgLux);
+  
+  // Publicar micrófono (voltaje)
+  char msgMic[16];
+  dtostrf(micValue[1], 4, 2, msgMic);
+  mqttClient.publish(TOPIC_MIC, msgMic);
+  Serial.print("Publicado en ");
+  Serial.print(TOPIC_MIC);
+  Serial.print(": ");
+  Serial.println(msgMic);
 }
