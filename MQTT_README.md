@@ -26,7 +26,8 @@ const char* TOPIC_STATUS  = "user1/status";
   3. Conectarse a WiFi
   4. Habilitar Access Point
   5. Cambiar a modo BLE (B)
-  6. Cambiar a modo MQTT (M)  ← NUEVO
+  6. Mandar lecturas de prueba al servidor
+  7. Cambiar a modo MQTT (M)  ← NUEVO
   ```
 
 ### 4. **Funciones MQTT Implementadas**
@@ -57,7 +58,7 @@ const char* TOPIC_STATUS  = "user1/status";
 5. Espera confirmación de conexión
 
 ### Paso 2: Activar MQTT
-1. Una vez conectado a WiFi, selecciona la opción **6** (o presiona 'M')
+1. Una vez conectado a WiFi, selecciona la opción **7** (o presiona 'M')
 2. El ESP32 se desconectará del Bluetooth Clásico
 3. Se conectará al broker MQTT
 4. Comenzará a publicar datos automáticamente cada 10 segundos

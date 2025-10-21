@@ -559,4 +559,4 @@ void publicarDatosMQTT() {
   Serial.print(TOPIC_MIC);
   Serial.print(": ");
   Serial.println(msgMic);
-}
+ }
