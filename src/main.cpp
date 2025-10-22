@@ -136,23 +136,32 @@ void setup(){
   // Modo combinado: AP + Station (puede conectarse Y crear red)
   WiFi.mode(WIFI_AP_STA);
 
+  // Iniciar Access Point desde el inicio para que esté siempre disponible
+  ap_start(ap_ssid, ap_password);
+  
+  // DNS server para redirigir tráfico del AP
+  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+  
+  Serial.print("Access Point iniciado automáticamente. IP del AP: ");
+  Serial.println(WiFi.softAPIP());
 
-  /*
-  NOTA: esta sección se retiene por si acaso.
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print("--- Conectando ---");
-    SerialBT.print("--- Conectando ---");                       
+  // Inicializar SPIFFS
+  if(!SPIFFS.begin(true)){
+    Serial.println("Error montando SPIFFS");
+  } else {
+    Serial.println("SPIFFS montado correctamente");
   }
-
-
-  Serial.println("\nWiFi conectado como cliente :)");
-  SerialBT.println("\nWiFi conectado como cliente :)"); 
-  Serial.print("IP como cliente: ");
-  SerialBT.print("IP como cliente: ");               
-  Serial.println(WiFi.localIP());
-  SerialBT.println(WiFi.localIP());               
-  */
+  
+  // Configurar manejadores del servidor web
+  server.on("/", handleRoot);
+  server.on("/index.html", handleRoot);
+  server.on("/generate_204", handleRoot);    // Android captive portal detection
+  server.on("/fwlink", handleRoot);          // Microsoft captive portal detection  
+  server.on("/ncsi.txt", handleRoot);        // Microsoft Network Connectivity Status Indicator
+  server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
+  server.begin();
+  
+  Serial.println("Servidor web iniciado");
 
   // ## Inicializar BH1750
   Wire.begin(); // iniciar protocolo I2C
@@ -168,6 +177,9 @@ void setup(){
 }
 
 void loop(){
+  // IMPORTANTE: Procesar DNS y servidor web SIEMPRE (excepto en modos BLE/MQTT)
+  // Esto permite que el portal cautivo funcione aunque haya cliente Bluetooth
+  
   // Si el modo BLE está activo, procesar datos BLE
   if (modoBLEActivo) {
     float luxValue = LecturaLuxometro();
@@ -206,14 +218,11 @@ void loop(){
     return;
   }
 
+  // Procesar DNS y servidor web en cada iteración
   dnsServer.processNextRequest();
   server.handleClient();
-
-  if(!SerialBT.hasClient()){
-    MenuMostrado = false;
-    return; // Salida de loop.
-  }
-  if(!MenuMostrado){
+  // Mostrar menú si hay cliente Bluetooth y no se ha mostrado
+  if(!MenuMostrado && SerialBT.hasClient()){
     char buffer[1000];
     sprintf(buffer, "# Opciones:\n1. KY-037 (%d lecturas)\n2. BH1750 (%d lecturas)\n3. Conectarse a WiFi\n4. Habilitar Access Point\n5. Cambiar a modo BLE (B)\n6. Mandar lecturas de prueba al servidor\n7. Cambiar a modo MQTT (M)", CantidadLecturas, CantidadLecturas);
     Serial.println(buffer);
@@ -254,14 +263,15 @@ void loop(){
         // Procesar peticiones web entre lecturas
         dnsServer.processNextRequest();
         server.handleClient();
-      }
-    } else if (Eleccion == 3) {
+      }    } else if (Eleccion == 3) {
         // Conectar a WiFi
         Serial.println("Escribe el SSID:");
         SerialBT.println("Escribe el SSID:");
         
-        // Esperar SSID
+        // Esperar SSID (sin bloquear el servidor web)
         while(!SerialBT.available()) {
+          dnsServer.processNextRequest();
+          server.handleClient();
           delay(10);
         }
         ssid = SerialBT.readStringUntil('\n');
@@ -270,19 +280,23 @@ void loop(){
         Serial.println("Escribe la contraseña:");
         SerialBT.println("Escribe la contraseña:");
         
-        // Esperar contraseña
+        // Esperar contraseña (sin bloquear el servidor web)
         while(!SerialBT.available()) {
+          dnsServer.processNextRequest();
+          server.handleClient();
           delay(10);
         }
         password = SerialBT.readStringUntil('\n');
-        password.trim();
-        
+        password.trim();        
         // Conectar
         WiFi.begin(ssid.c_str(), password.c_str());
         
         int Intentos = 0;
         while ((WiFi.status() != WL_CONNECTED) && (Intentos < IntentosConexion)) {
           delay(500);
+          // Procesar servidor web durante conexión
+          dnsServer.processNextRequest();
+          server.handleClient();
           Intentos++;                       
         }
         
@@ -294,11 +308,11 @@ void loop(){
         } else { 
           Serial.println("No se pudo conectar");
           SerialBT.println("No se pudo conectar");
-        }
-      delay(1000);   
+        }      delay(1000);   
     } else if (Eleccion == 4){
         // Crear Access Point propio
         initiAP(ap_ssid, ap_password);
+        MenuMostrado = false;
     } else if (Eleccion == 5){
         // Cambiar a modo BLE
         Serial.println("Cambiando a modo BLE. Te desconectarás del Bluetooth Clásico.");
