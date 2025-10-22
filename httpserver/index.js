@@ -25,6 +25,16 @@ app.get("/lts", (req, res) => {
     }
 })
 
+app.get("/", (req, res) => {
+    const data = JSON.parse(fs.readFileSync("data.json", "utf8"));
+
+    if (data.length > 0) {
+        res.json(data);
+    } else {
+        res.json([]);
+    }
+})
+
 app.listen(8001, () => {
     console.log("Server is running on port 8001");
 });
