@@ -183,6 +183,88 @@
             line-height: 1.25rem;
         }
 
+        /* Estilos para el panel de sensores */
+        .sensor-panel {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, .08);
+            border-radius: var(--radius);
+            background: linear-gradient(180deg, rgba(255, 255, 255, .01), rgba(255, 255, 255, .00)),
+                #0f1217;
+        }
+
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .sensor-item {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, .02);
+            border: 1px solid rgba(255, 255, 255, .05);
+        }
+
+        .sensor-item label {
+            display: block;
+            font-size: .8rem;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .sensor-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--brand);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+
+        /* Indicador de estado */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: .85rem;
+            color: var(--muted);
+            justify-content: center;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #666;
+            transition: background-color .3s ease;
+        }
+
+        .status-dot.status-connecting {
+            background: #ffa500;
+            animation: pulse 1s infinite;
+        }
+
+        .status-dot.status-connected {
+            background: #4ade80;
+        }
+
+        .status-dot.status-error {
+            background: var(--error);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
         @media (max-width:360px) {
             .card {
                 padding: 22px
@@ -190,6 +272,15 @@
 
             h1 {
                 font-size: 1.12rem
+            }
+
+            .sensor-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .sensor-panel {
+                padding: 16px;
             }
         }
     </style>
@@ -235,8 +326,125 @@
                 el atributo <code>action</code> debe apuntar a un endpoint (por ejemplo, en tu ESP32 o backend)
                 que reciba <code>POST</code> con <code>username</code> y <code>password</code>.
             </div>
+
+            <!-- Panel de datos de sensores -->
+            <div class="sensor-panel" id="sensorPanel" style="display: none;">
+                <h2 style="margin: 20px 0 16px; font-size: 1.1rem; color: var(--ink);">Datos de Sensores</h2>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <label>Sonido Digital</label>
+                        <div class="sensor-value" id="sonidoDigital">--</div>
+                    </div>
+                    <div class="sensor-item">
+                        <label>Voltaje</label>
+                        <div class="sensor-value" id="voltaje">-- V</div>
+                    </div>
+                    <div class="sensor-item">
+                        <label>Luminosidad</label>
+                        <div class="sensor-value" id="lux">-- lux</div>
+                    </div>
+                </div>
+                <div class="status-indicator">
+                    <span id="statusIndicator" class="status-dot"></span>
+                    <span id="statusText">Conectando...</span>
+                </div>
+            </div>
         </section>
     </main>
+
+    <script>
+        // Variables globales
+        let isLoggedIn = false;
+        let sensorUpdateInterval;
+        const API_URL = 'http://89.117.53.122:8001/lts';
+
+        // Elementos del DOM
+        const form = document.querySelector('form');
+        const sensorPanel = document.getElementById('sensorPanel');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+
+        // Manejar el login
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('user').value;
+            const password = document.getElementById('pass').value;
+
+            // Simulación básica de login (puedes cambiar esta lógica)
+            if (username && password) {
+                isLoggedIn = true;
+                showSensorPanel();
+                startSensorUpdates();
+            } else {
+                alert('Por favor, ingresa usuario y contraseña');
+            }
+        });
+
+        // Mostrar panel de sensores
+        function showSensorPanel() {
+            sensorPanel.style.display = 'block';
+        }
+
+        // Iniciar actualizaciones de sensores
+        function startSensorUpdates() {
+            // Actualizar inmediatamente
+            updateSensorData();
+
+            // Actualizar cada 2 segundos
+            sensorUpdateInterval = setInterval(updateSensorData, 2000);
+        }
+
+        // Función para actualizar datos de sensores
+        async function updateSensorData() {
+            try {
+                setStatus('connecting', 'Actualizando...');
+
+                const response = await fetch(API_URL);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data && data.length > 0) {
+                    const sensorData = data[0];
+
+                    // Actualizar valores en el DOM
+                    document.getElementById('sonidoDigital').textContent = sensorData.sonido_digital;
+                    document.getElementById('voltaje').textContent = sensorData.voltaje.toFixed(2) + ' V';
+                    document.getElementById('lux').textContent = sensorData.lux.toFixed(2) + ' lux';
+
+                    setStatus('connected', 'Conectado');
+                } else {
+                    throw new Error('No se recibieron datos');
+                }
+
+            } catch (error) {
+                console.error('Error al obtener datos de sensores:', error);
+                setStatus('error', 'Error de conexión');
+
+                // Mostrar valores de error
+                document.getElementById('sonidoDigital').textContent = '--';
+                document.getElementById('voltaje').textContent = '-- V';
+                document.getElementById('lux').textContent = '-- lux';
+            }
+        }
+
+        // Actualizar estado de conexión
+        function setStatus(status, text) {
+            statusIndicator.className = `status-dot status-${status}`;
+            statusText.textContent = text;
+        }
+
+        // Limpiar interval al cerrar la página
+        window.addEventListener('beforeunload', function () {
+            if (sensorUpdateInterval) {
+                clearInterval(sensorUpdateInterval);
+            }
+        });
+    </script>
 </body>
 
 </html>

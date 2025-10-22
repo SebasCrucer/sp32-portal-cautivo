@@ -1,7 +1,10 @@
 import express from "express";
 import fs from "fs";
+import cors from "cors";
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 
 app.post("/", (req, res) => {
@@ -12,6 +15,16 @@ app.post("/", (req, res) => {
     res.send("Data saved");
 });
 
+app.get("/lts", (req, res) => {
+    const data = JSON.parse(fs.readFileSync("data.json", "utf8"));
+
+    if (data.length > 0) {
+        res.json([data[data.length - 1]]);
+    } else {
+        res.json([]);
+    }
+})
+
 app.listen(8001, () => {
-    console.log("Server is running on port 3000");
+    console.log("Server is running on port 8001");
 });
