@@ -199,7 +199,11 @@ void loop(){
     Serial.println(sensorData1);
     Serial.println(sensorData2);
     
-    delay(2000);
+    SerialBT.print("Valor BLE actualizado: ");
+    SerialBT.println(sensorData1);
+    SerialBT.println(sensorData2);
+
+    delay(5000);
     return;
   }
 
@@ -490,6 +494,8 @@ void initiAP(char* ap_ssid, char* ap_password) {
     server.onNotFound(handleNotFound);         // Capturar cualquier otra petición
     server.begin();
 }
+
+
 
 // ## BLE
 void activarModoBLE() {
